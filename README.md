@@ -1,169 +1,203 @@
 # Real-Time Game System Implementation on FPGA  
 ### Flappy Bird – Deterministic Hardware-Level Gameplay Architecture (VHDL)
 
-## Project Background
+---
 
-This project was originally developed as part of a university group assignment.
+# Project Overview
 
-This repository documents my individual technical contributions and system-level design in implementing a fully playable real-time game directly in hardware using VHDL on a Cyclone V FPGA board (DE0-CV).
+A fully playable **Flappy Bird** implementation running directly on a **Cyclone V (DE0-CV) FPGA** using **VHDL**, rendering graphics through **640×480 VGA output** with **PS/2 mouse input**.
 
-The goal of this portfolio version is to present the architectural and systems engineering aspects of the project.
+Unlike typical engine-based game development, all gameplay systems — including state management, entity interaction, procedural variation, collision detection, and rendering control — are implemented directly in synchronous hardware logic.
+
+This project focuses on **deterministic real-time gameplay systems** and demonstrates how common game architecture patterns can be implemented without a software game engine.
+
+Key highlights:
+
+- Moore FSM based game state architecture
+- Modular entity system (bird, pipes, collectibles)
+- Procedural gap generation using LFSR
+- Frame-synchronized gameplay updates
+- Hardware-constrained performance optimization
 
 ---
 
-## Overview
+# Running on Hardware
 
-A fully playable implementation of Flappy Bird rendered at 640x480 VGA resolution, with PS/2 mouse input handling and deterministic clock-driven gameplay logic.
+![FPGA Board](media/FPGA_board.png)
 
-Unlike engine-based development, all systems — state transitions, collision detection, procedural variation, rendering control, and timing — were implemented at the hardware level.
-
-This project demonstrates:
-
-- Deterministic real-time state control  
-- Modular entity architecture  
-- Procedural variation using LFSR  
-- Collision and invincibility systems  
-- Performance-aware hardware design  
+The system runs on a **DE0-CV Cyclone V FPGA development board**, driving a VGA display and accepting PS/2 mouse input for gameplay interaction.
 
 ---
 
-## System Architecture
+# Gameplay Screenshots
 
-The system follows a control-path / data-path architecture.
+### Main Menu
 
-A central Moore Finite State Machine (FSM) manages high-level state transitions:
+![Main Menu](media/Main_menu_state.png)
+
+The main menu allows players to select different gameplay modes using mouse input.
+
+---
+
+### Playing State
+
+![Playing](media/Playing_state.png)
+
+During gameplay the bird entity interacts with pipes and collectibles while score and life information are rendered through the text display system.
+
+---
+
+### Death Menu
+
+![Death Menu](media/death_menu.png)
+
+When the player loses all lives, the game transitions to the death menu where the player can retry or return to the main menu.
+
+---
+
+# System Architecture
+
+![System Architecture](docs/architecture.png)
+
+The system follows a **control-path / data-path architecture**.
+
+A central gameplay module integrates the main subsystems:
+
+- Bird entity controller
+- Pipe obstacle system
+- Collectible gift system
+- LFSR random generator
+- Text rendering module
+- Seven-segment timer display
+
+Each subsystem operates as an independent module connected through the top-level gameplay controller.
+
+---
+
+# Moore Finite State Machine
+
+![Moore FSM](docs/fsm_moore.png)
+
+The gameplay flow is implemented as a **three-state Moore machine**:
+
+Main states:
 
 - Main Menu  
 - Playing  
 - Death Menu  
 
-Gameplay entities operate as modular components:
-
-- Bird controller  
-- Pipe recycling system  
-- Gift system  
-- LFSR random generator  
-- Timer module  
-- Character ROM for text rendering  
-- VGA output controller  
-
-The FSM acts as a display multiplexer and signal coordinator, ensuring state isolation and deterministic transitions.
-
-(Insert architecture diagram here)
-
----
-
-## Finite State Machine Design
-
-A three-state Moore machine controls the game flow.
-
 Transitions:
 
 - Main Menu → Playing (mode selected)
-- Playing → Death (collision or life = 0)
-- Death → Retry / Main Menu
+- Playing → Death Menu (collision / life = 0)
+- Death Menu → Retry or Main Menu
 
-State logic is separated from entity logic, preventing unintended signal propagation.
-
-This structure mirrors high-level game state management patterns used in modern engines.
-
-(Insert FSM diagram here)
+Separating state control from entity logic prevents unintended signal propagation.
 
 ---
 
-## Core Gameplay Systems
+# Quartus FSM Visualization
 
-### Deterministic Update Logic
+![Quartus FSM](docs/fsm_control.png)
 
-The FPGA operates at 50 MHz (divided via PLL).  
-Gameplay timing is explicitly synchronized to clock edges.
-
-There is no implicit “game loop” abstraction — motion, collisions, and scoring are defined through synchronous logic.
+Quartus Prime synthesis tools were used to visualize and verify the FSM state transitions in hardware.
 
 ---
 
-### Entity Recycling System (Object Pooling Concept)
+# Core Gameplay Systems
 
-Three pipe entities and three gift entities are recycled.
+## Deterministic Frame-Based Updates
 
-When reaching screen boundaries, they reposition to the right and continue movement.
+The FPGA operates at **50 MHz**, with gameplay updates synchronized to the display timing.
 
-This mimics object pooling techniques used in engine-based development to avoid runtime allocation.
-
----
-
-### Procedural Variation (LFSR)
-
-An LFSR generates pseudo-random heights for pipe gaps (range 30–329).
-
-This provides gameplay variation without software-based RNG libraries.
-
-Gift visibility is conditionally tied to pipe height, creating systemic interdependency.
+Instead of a traditional software game loop, motion and interactions are updated through synchronous logic tied to clock edges.
 
 ---
 
-### Collision & Invincibility System
+## Entity Recycling System
 
-Collision detection is area-overlap based.
+Three pipe entities and three gift entities are reused through a **recycling mechanism**.
 
-On collision:
-- A timer activates a 3-second invincibility window
-- Bird flashes visually
-- Life decrement is gated during invincibility
-
-This demonstrates state-dependent behavioral modulation.
+When an entity exits the screen boundary, it is repositioned and reused, similar to **object pooling strategies used in game engines**.
 
 ---
 
-## Performance & Timing Constraints
+## Procedural Variation (LFSR)
 
-Timing analysis (Quartus Prime) revealed:
+Pipe gap positions are generated using an **LFSR-based pseudo-random generator**.
 
-- Maximum achievable frequency: 11.72 MHz  
-- Target refresh: 25 MHz  
+The generator ensures that pipe gaps remain within a playable range while avoiding repetitive patterns.
 
-Analysis suggested that sequential logic in menu rendering may limit achievable FMAX.
+---
 
-This project required balancing gameplay complexity with hardware resource constraints.
+## Collision & Invincibility System
+
+Collision detection uses **area-overlap checks** between the bird entity and obstacles.
+
+When a collision occurs:
+
+- An invincibility timer activates
+- The bird flashes visually
+- Life reduction is temporarily gated
+
+This improves gameplay fairness and feedback.
+
+---
+
+# Performance & Hardware Constraints
+
+Timing analysis in **Quartus Prime** showed:
+
+- Maximum achievable frequency: **11.72 MHz**
+- Target refresh frequency: **25 MHz**
+
+Sequential rendering logic within the menu modules introduced timing constraints.
+
+Despite this, the system maintained an effective refresh rate of approximately **59.5 Hz**.
 
 Resource usage:
 
-- 3194 ALMs (~17%)
-- 817 registers
-- <1% block memory
-- 0 DSP blocks
+- **3194 ALMs (~17%)**
+- **817 registers**
+- **<1% block memory**
+- **0 DSP blocks**
 
 ---
 
-## My Contributions
+# My Contributions
 
-- Designed and implemented the Moore FSM control unit  
-- Developed collision detection and invincibility timing logic  
-- Implemented pipe recycling and enable chaining mechanism  
-- Integrated LFSR-based procedural gap generation  
-- Participated in performance bottleneck analysis  
+My primary focus was on **gameplay systems and control architecture**.
 
----
+Key contributions:
 
-## Lessons & Future Improvements
-
-If expanding this project further:
-
-- Refactor menu rendering logic to improve FMAX  
-- Introduce sprite pipeline for richer visual design  
-- Add pause state with gated clock domain  
-- Further decouple rendering logic from gameplay state  
+- Designed and implemented the **Moore FSM game controller**
+- Implemented the **pipe spawning and obstacle generation system**
+- Developed the **LFSR-based pseudo-random gap generator**
+- Integrated gameplay subsystems in the **top-level orchestration module**
+- Implemented gameplay interaction logic and difficulty scaling
+- Contributed to debugging and performance analysis during integration
 
 ---
 
-## Relevance to Game Systems Programming
+# Lessons & Future Improvements
 
-This project strengthened my understanding of:
+Potential improvements if the project were extended:
 
-- Deterministic system design  
-- State architecture  
-- Modular entity interaction  
-- Performance constraints under limited resources  
-- Low-level rendering control  
+- Refactor menu rendering logic to improve timing performance
+- Introduce sprite rendering pipelines
+- Implement a pause state with gated clock domains
+- Further decouple rendering and gameplay logic
 
-Although implemented in hardware, the architectural patterns directly relate to engine-level gameplay systems.
+---
+
+# Relevance to Game Systems Programming
+
+Although implemented entirely in hardware, this project explores architectural patterns common in modern game engines:
+
+- Deterministic update loops
+- State-driven gameplay flow
+- Modular entity interaction
+- Procedural content generation
+- Performance-aware system design
+
+Working at the hardware level provided deeper insight into how gameplay systems function beneath engine abstractions.
